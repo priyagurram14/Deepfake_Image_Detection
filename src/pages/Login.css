@@ -1,0 +1,101 @@
+/* Body and Global Styles */
+body {
+  margin: 0;
+  font-family: 'Arial', sans-serif;
+  background: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6XjXHGodIILRlqiB-vN5ig8Q6XeX-oFxwIw&s') no-repeat center center/cover;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Dark overlay to dull the background */
+body::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6); /* Dark overlay */
+  z-index: 0;
+}
+
+/* Login Form Styling */
+.login-container {
+  background: rgba(255, 255, 255, 0.15); /* Glass effect */
+  backdrop-filter: blur(12px); /* Blur effect */
+  border-radius: 12px;
+  padding: 40px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Highlighted Login Text */
+.login-container h2 {
+  font-size: 26px;
+  font-weight: bold;
+  color: #fff; /* White text */
+  text-shadow: 2px 2px 10px rgba(255, 255, 255, 0.5); /* Glow effect */
+  margin-bottom: 20px;
+}
+
+/* Input Styling */
+input[type="email"],
+input[type="password"] {
+  width: 100%;
+  padding: 15px;
+  margin: 12px 0;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  transition: 0.3s;
+}
+
+input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Button Styling */
+button {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  background: linear-gradient(90deg, #ff6b6b, #ff4757);
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+
+button:hover {
+  background: linear-gradient(90deg, #ff4757, #ff6b6b);
+  transform: scale(1.05);
+}
+
+/* Link Styling */
+.login-container p {
+  color: #fff;
+  font-size: 14px;
+}
+
+.login-container a {
+  color: #ff6b6b;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
+
+.login-container a:hover {
+  color: #ff4757;
+}
