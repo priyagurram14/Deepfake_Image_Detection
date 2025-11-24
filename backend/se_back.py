@@ -1,44 +1,64 @@
+# backend/se_back.py
 from flask import Flask, request, jsonify
 from transformers import ViTImageProcessor, ViTForImageClassification
 from PIL import Image
 import torch
 import os
 from flask_cors import CORS
+import io
+import logging
 
-# Initialize Flask
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("se_back")
+
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
-# Path to your model directory
-model_dir = os.path.abspath("./deepfake_vs_real_image_detection")
-print("Model path:", model_dir)
+# Allow frontend origin via env var, fallback to localhost
+FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000")
+CORS(app, resources={r"/*": {"origins": FRONTEND_ORIGIN}})
 
-# Load model
-model = ViTForImageClassification.from_pretrained(
-    model_dir,
-    local_files_only=True
-)
+# Hugging Face model repo id (your public repo)
+MODEL_REPO = "priyagurrram1455/deepfake_vs_real_image_detection"
 
-# Load processor
-processor = ViTImageProcessor.from_pretrained(
-    model_dir,
-    local_files_only=True
-)
+# Optional: if your repo is private set HF_TOKEN env var in Render/Vercel
+HF_TOKEN = os.environ.get("HF_TOKEN", None)
+use_auth_token = HF_TOKEN if HF_TOKEN else None
 
-print("Model & Processor loaded successfully!")
+log.info(f"Loading model from Hugging Face repo: {MODEL_REPO} (auth token present: {'yes' if HF_TOKEN else 'no'})")
 
-@app.route('/')
+# Load processor + model from Hugging Face hub (cached automatically)
+try:
+    processor = ViTImageProcessor.from_pretrained(MODEL_REPO, use_auth_token=use_auth_token)
+    model = ViTForImageClassification.from_pretrained(MODEL_REPO, use_auth_token=use_auth_token)
+    model.eval()
+    log.info("Model and processor loaded successfully.")
+except Exception as e:
+    log.exception("Failed to load model from Hugging Face. Make sure MODEL_REPO is correct and HF_TOKEN (if private) is set.")
+    raise
+
+@app.route("/")
 def home():
     return "Flask Backend is working"
 
-@app.route('/predict', methods=['POST'])
+def read_image_from_file_storage(file_storage):
+    image = Image.open(file_storage.stream).convert("RGB")
+    return image
+
+@app.route("/predict", methods=["POST"])
 def predict():
     try:
-        if 'image' not in request.files:
-            return jsonify({"error": "No image uploaded"}), 400
-
-        file = request.files['image']
-        image = Image.open(file.stream).convert("RGB")
+        # Accept either multipart form-file (preferred) or JSON with base64 image.
+        if "image" in request.files:
+            file = request.files["image"]
+            image = read_image_from_file_storage(file)
+        else:
+            # fallback: JSON with {"image": "<base64 string>"}
+            data = request.get_json(silent=True)
+            if not data or "image" not in data:
+                return jsonify({"error": "No image uploaded"}), 400
+            import base64
+            img_bytes = base64.b64decode(data["image"])
+            image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
         # Preprocess
         inputs = processor(images=image, return_tensors="pt")
@@ -48,18 +68,20 @@ def predict():
             outputs = model(**inputs)
 
         logits = outputs.logits
-        cls_id = logits.argmax(-1).item()
-        label = model.config.id2label[cls_id]
-        confidence = torch.softmax(logits, dim=-1)[0][cls_id].item()
+        cls_id = int(logits.argmax(-1).item())
+        label = model.config.id2label.get(cls_id, str(cls_id))
+        confidence = float(torch.softmax(logits, dim=-1)[0][cls_id].item())
 
         return jsonify({
             "prediction": label,
             "confidence": confidence
-        })
+        }), 200
 
     except Exception as e:
+        log.exception("Prediction failed")
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
