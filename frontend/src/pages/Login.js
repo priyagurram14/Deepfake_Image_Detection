@@ -1,37 +1,37 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate for redirecting
-import './Login.css';  // Assuming you have a separate CSS file for styling
+// frontend/src/pages/login.js
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import "./Login.css";
 
 function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  // Handle form submission
   const handleSubmit = (e) => {
     e.preventDefault();
+    setError("");
 
-    // Get stored user data from localStorage
-    const storedUser = JSON.parse(localStorage.getItem('user'));
-
-    // Check if the entered details match the stored user details
-    if (storedUser && storedUser.email === email && storedUser.password === password) {
-      // Redirect to home page upon successful login
-      navigate('/home');
-    } else {
-      // If credentials are invalid, show an error message
-      setError("Invalid credentials");
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("user"));
+      if (storedUser && storedUser.email === email && storedUser.password === password) {
+        // success -> go to home
+        navigate("/home");
+      } else {
+        setError("Invalid credentials");
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("An error occurred. Try again.");
     }
   };
 
   return (
     <div className="login-container">
       <h2>Login to Your Account</h2>
-      {/* Display error message if any */}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      
-      {/* Login Form */}
+      {error && <p style={{ color: "red" }}>{error}</p>}
+
       <form onSubmit={handleSubmit}>
         <input
           type="email"
@@ -49,10 +49,12 @@ function Login() {
         />
         <button type="submit">Login</button>
       </form>
-      
-      {/* Link to Register page */}
+
       <p>
-        Don't have an account? <a href="/register">Register</a>
+        Don't have an account?{" "}
+        <button onClick={() => navigate("/register")} style={{ color: "#06f", background: "none", border: "none", cursor: "pointer" }}>
+          Register
+        </button>
       </p>
     </div>
   );

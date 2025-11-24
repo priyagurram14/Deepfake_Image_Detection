@@ -1,6 +1,6 @@
-// src/components/FileUpload.js
-import React, { useState } from 'react';
-import axios from 'axios';
+// frontend/src/components/FileUpload.js
+import React, { useState } from "react";
+import { predictImageFile } from "../api";
 
 const FileUpload = ({ setResult }) => {
   const [file, setFile] = useState(null);
@@ -12,33 +12,29 @@ const FileUpload = ({ setResult }) => {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('file', file);
+    if (!file) return alert("Please choose an image first.");
 
     setLoading(true);
-
     try {
-      const response = await axios.post('http://localhost:5000/detect', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setResult(response.data);
-    } catch (error) {
-      console.error('Error during detection:', error);
-      setResult({ error: 'Error during detection' });
+      // predictImageFile will send form-data with key "image"
+      const data = await predictImageFile(file);
+      // backend returns { prediction, confidence, raw }
+      setResult(data);
+    } catch (err) {
+      console.error("Prediction error:", err);
+      setResult({ error: err.message || "Prediction failed" });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
     <div className="file-upload-container">
-      <h2>Upload a Video/Image</h2>
+      <h2>Upload an Image</h2>
       <form onSubmit={onSubmit}>
-        <input type="file" onChange={onFileChange} required />
+        <input type="file" accept="image/*" onChange={onFileChange} required />
         <button type="submit" disabled={loading}>
-          {loading ? 'Processing...' : 'Detect'}
+          {loading ? "Processing..." : "Detect"}
         </button>
       </form>
     </div>

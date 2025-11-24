@@ -1,9 +1,19 @@
-// src/components/Dashboard.js
-import React from 'react';
+// frontend/src/components/Dashboard.js
+import React, { useState } from "react";
+import FileUpload from "./FileUpload";
+import Result from "./Result";
 
 const Dashboard = () => {
-  return <div className="dashboard-component">This is the Dashboard component</div>;
+  const [result, setResult] = useState(null);
+
+  return (
+    <div className="dashboard-component">
+      <h1>Deepfake Detection Dashboard</h1>
+      <FileUpload setResult={setResult} />
+      <hr />
+      <Result result={result} />
+    </div>
+  );
 };
 
 export default Dashboard;
-
