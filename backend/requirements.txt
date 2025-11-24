@@ -1,8 +1,5 @@
 Flask>=2.2
 Flask-Cors>=3.0
-torch            # choose the correct wheel for your OS/CUDA (see note below)
-transformers>=4.30
-huggingface-hub>=0.16
+requests>=2.28
 Pillow>=9.0
 gunicorn>=20.1
-gevent>=22.10

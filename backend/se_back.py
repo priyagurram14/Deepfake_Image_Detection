@@ -1,86 +1,74 @@
 # backend/se_back.py
-from flask import Flask, request, jsonify
-from transformers import ViTImageProcessor, ViTForImageClassification
-from PIL import Image
-import torch
 import os
-from flask_cors import CORS
 import io
-import logging
-
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("se_back")
+import base64
+import requests
+from flask import Flask, request, jsonify
+from PIL import Image
+from flask_cors import CORS
 
 app = Flask(__name__)
-
-# Allow frontend origin via env var, fallback to localhost
-FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000")
+FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "*")
 CORS(app, resources={r"/*": {"origins": FRONTEND_ORIGIN}})
 
-# Hugging Face model repo id (your public repo)
-MODEL_REPO = "priyagurrram1455/deepfake_vs_real_image_detection"
+# Hugging Face model (public)
+HF_MODEL = "priyagurrram1455/deepfake_vs_real_image_detection"
+HF_API = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
+HF_API_TOKEN = os.environ.get("HF_API_TOKEN")  # optional
 
-# Optional: if your repo is private set HF_TOKEN env var in Render/Vercel
-HF_TOKEN = os.environ.get("HF_TOKEN", None)
-use_auth_token = HF_TOKEN if HF_TOKEN else None
-
-log.info(f"Loading model from Hugging Face repo: {MODEL_REPO} (auth token present: {'yes' if HF_TOKEN else 'no'})")
-
-# Load processor + model from Hugging Face hub (cached automatically)
-try:
-    processor = ViTImageProcessor.from_pretrained(MODEL_REPO, use_auth_token=use_auth_token)
-    model = ViTForImageClassification.from_pretrained(MODEL_REPO, use_auth_token=use_auth_token)
-    model.eval()
-    log.info("Model and processor loaded successfully.")
-except Exception as e:
-    log.exception("Failed to load model from Hugging Face. Make sure MODEL_REPO is correct and HF_TOKEN (if private) is set.")
-    raise
+HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"} if HF_API_TOKEN else {}
 
 @app.route("/")
 def home():
-    return "Flask Backend is working"
+    return "Flask backend (HF Inference API proxy) is working"
 
-def read_image_from_file_storage(file_storage):
-    image = Image.open(file_storage.stream).convert("RGB")
-    return image
+def image_to_bytes(file_storage):
+    # Normalize to PNG bytes (HF accepts raw image bytes)
+    img = Image.open(file_storage.stream).convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf.read()
 
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        # Accept either multipart form-file (preferred) or JSON with base64 image.
-        if "image" in request.files:
-            file = request.files["image"]
-            image = read_image_from_file_storage(file)
-        else:
-            # fallback: JSON with {"image": "<base64 string>"}
-            data = request.get_json(silent=True)
-            if not data or "image" not in data:
-                return jsonify({"error": "No image uploaded"}), 400
-            import base64
-            img_bytes = base64.b64decode(data["image"])
-            image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        # Accept multipart/form-data file upload under "image"
+        if "image" not in request.files:
+            return jsonify({"error": "No image uploaded (expected form field 'image')"}), 400
 
-        # Preprocess
-        inputs = processor(images=image, return_tensors="pt")
+        img_bytes = image_to_bytes(request.files["image"])
 
-        # Inference
-        with torch.no_grad():
-            outputs = model(**inputs)
+        # Send the image bytes directly to HF Inference API
+        hf_resp = requests.post(HF_API, headers=HEADERS, data=img_bytes, timeout=60)
 
-        logits = outputs.logits
-        cls_id = int(logits.argmax(-1).item())
-        label = model.config.id2label.get(cls_id, str(cls_id))
-        confidence = float(torch.softmax(logits, dim=-1)[0][cls_id].item())
+        if hf_resp.status_code != 200:
+            return jsonify({
+                "error": "Hugging Face inference failed",
+                "status_code": hf_resp.status_code,
+                "detail": hf_resp.text
+            }), 502
 
-        return jsonify({
-            "prediction": label,
-            "confidence": confidence
-        }), 200
+        # HF typically returns a JSON array of label/score objects for image-classification:
+        # e.g. [{"label":"FAKE","score":0.98}, {"label":"REAL","score":0.02}]
+        data = hf_resp.json()
 
+        # Normalize output to {"prediction": <top_label>, "confidence": <score>, "raw": <data>}
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            top = max(data, key=lambda x: x.get("score", 0))
+            return jsonify({
+                "prediction": top.get("label"),
+                "confidence": float(top.get("score", 0)),
+                "raw": data
+            }), 200
+
+        # Fallback: return raw HF response
+        return jsonify({"raw": data}), 200
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "Request to HF API failed", "detail": str(e)}), 502
     except Exception as e:
-        log.exception("Prediction failed")
-        return jsonify({"error": str(e)}), 500
-
+        return jsonify({"error": "Internal server error", "detail": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
